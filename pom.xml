@@ -73,6 +73,17 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<dependency>
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- Required at runtime by Spring Security's Argon2PasswordEncoder -->
+		<dependency>
+			<groupId>org.bouncycastle</groupId>
+			<artifactId>bcprov-jdk18on</artifactId>
+			<version>1.74</version>
+		</dependency>
 	</dependencies>
 
 
@@ -90,6 +101,25 @@
 						</exclude>
 					</excludes>
 				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>exec-maven-plugin</artifactId>
+				<version>3.1.1</version>
+				<executions>
+					<execution>
+						<id>bcrypt-benchmark</id>
+						<configuration>
+							<mainClass>com.example.securitylearing.bench.BCryptBenchmark</mainClass>
+						</configuration>
+					</execution>
+					<execution>
+						<id>argon2-benchmark</id>
+						<configuration>
+							<mainClass>com.example.securitylearing.bench.Argon2Benchmark</mainClass>
+						</configuration>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>
