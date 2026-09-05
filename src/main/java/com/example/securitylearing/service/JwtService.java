@@ -43,5 +43,22 @@ public class JwtService {
   private SecretKey getSigningKey() {
     return Keys.hmacShaKeyFor(Decoders.BASE64.decode(secretKey));
   }
+  public String generateAccessToken(UserDetails userDetails) {
+    return buildToken(userDetails, "access", 1000 * 60 * 15);       // 15 phút
+  }
+
+  public String generateRefreshToken(UserDetails userDetails) {
+    return buildToken(userDetails, "refresh", 1000L * 60 * 60 * 24 * 7); // 7 ngày
+  }
+
+  private String buildToken(UserDetails userDetails, String type, long ttlMillis) {
+    return Jwts.builder()
+        .subject(userDetails.getUsername())
+        .claim("type", type)
+        .issuedAt(new Date())
+        .expiration(new Date(System.currentTimeMillis() + ttlMillis))
+        .signWith(getSigningKey())
+        .compact();
+  }
 
 }

@@ -1,10 +1,11 @@
 package com.example.securitylearing.entity;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.validation.constraints.NotBlank;
+import java.time.Instant;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -17,14 +18,15 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Note {
+public class RefreshToken {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
-  @NotBlank(message = "title khong duoc de trong")
-  private String title;
-  @NotBlank(message = "content khong duoc de trong")
-  private String content;
-  private String owner;
 
+  @Column(unique = true, nullable = false)
+  private String token;
+
+  private String username;
+  private Instant expiryDate;
+  private boolean revoked;
 }
