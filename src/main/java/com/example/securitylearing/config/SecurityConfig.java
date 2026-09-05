@@ -1,26 +1,29 @@
 package com.example.securitylearing.config;
-
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.Customizer;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 public class SecurityConfig {
 
   @Bean
-  public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
-    http.authorizeHttpRequests(
+  public SecurityFilterChain securityFilterChain(HttpSecurity http,JwtAuthenticationFilter jwtAuthFilter) throws Exception{
+    http
+        .csrf(httpSecurityCsrfConfigurer -> httpSecurityCsrfConfigurer.disable())
+        .sessionManagement(httpSecuritySessionManagementConfigurer -> httpSecuritySessionManagementConfigurer
+            .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        .authorizeHttpRequests(
         auth -> auth.requestMatchers("/hello").permitAll()
-            .requestMatchers("/note/**").authenticated()
+            .requestMatchers("/auth/**").permitAll()
+            .requestMatchers("/notes/**").authenticated()
             .anyRequest().authenticated()
     )
         .exceptionHandling(ex-> ex
@@ -35,8 +38,12 @@ public class SecurityConfig {
               response.getWriter().write("{\"error\":\"Bạn không đủ quyền\"}");
             })
         )
-        .httpBasic(Customizer.withDefaults());
+        .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
     return http.build();
+  }
+  @Bean
+  public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+    return config.getAuthenticationManager();
   }
 //  @Bean
 //  public UserDetailsService userDetailsService(PasswordEncoder passwordEncoder){

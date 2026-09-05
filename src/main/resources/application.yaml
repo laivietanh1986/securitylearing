@@ -1,3 +1,5 @@
 spring:
   application:
     name: securitylearing
+jwt:
+  secret: 47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
