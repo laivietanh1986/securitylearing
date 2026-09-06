@@ -17,7 +17,7 @@ public class CustomUserDetailService implements UserDetailsService {
     com.example.securitylearing.entity.User user = userRepository.findByUsername(username)
         .orElseThrow(() -> new UsernameNotFoundException("User not found "+username));
     return org.springframework.security.core.userdetails.User.withUsername(user.getUsername())
-        .password(user.getPassword())
+        .password(user.getPassword() != null ? user.getPassword() : "{noop}oauth2-external-user")
         .roles(user.getRoles())
         .build();
 

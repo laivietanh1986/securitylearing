@@ -15,17 +15,25 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
   @Bean
-  public SecurityFilterChain securityFilterChain(HttpSecurity http,JwtAuthenticationFilter jwtAuthFilter) throws Exception{
+  public SecurityFilterChain securityFilterChain(HttpSecurity http
+      ,JwtAuthenticationFilter jwtAuthFilter,
+  CustomOAuth2UserService customOAuth2UserService,
+      OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler) throws Exception{
     http
         .csrf(httpSecurityCsrfConfigurer -> httpSecurityCsrfConfigurer.disable())
         .sessionManagement(httpSecuritySessionManagementConfigurer -> httpSecuritySessionManagementConfigurer
-            .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
         .authorizeHttpRequests(
         auth -> auth.requestMatchers("/hello").permitAll()
             .requestMatchers("/auth/**").permitAll()
+            .requestMatchers("/oauth2/**", "/login/**").permitAll()
             .requestMatchers("/notes/**").authenticated()
             .anyRequest().authenticated()
     )
+        .oauth2Login(oauth2 -> oauth2
+            .userInfoEndpoint(userInfo -> userInfo.userService(customOAuth2UserService))
+            .successHandler(oAuth2LoginSuccessHandler)
+        )
         .exceptionHandling(ex-> ex
             .authenticationEntryPoint((request, response, authException) -> {
               response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);

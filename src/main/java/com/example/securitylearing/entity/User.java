@@ -26,8 +26,13 @@ public class User {
   private long id;
   @Column(unique = true,nullable = false)
   private String username;
-  @Column(nullable = false)
+  @Column(nullable = true)
   private String password;
+  @Column(nullable = true)
+  private String provider;    // "google", "github", null nếu là user loca
+
+  @Column(nullable = true)
+  private String providerId;  // id duy nhất Google/GitHub cấp cho user đó
   @Column(nullable = false)
   private String roles;
 
