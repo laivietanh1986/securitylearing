@@ -38,11 +38,18 @@ File này tóm tắt trạng thái hiện tại của project để tiếp tục
 
 Bước 8-11 (JWT, refresh token, ownership, OAuth2 GitHub) **không có trên branch này** — xem branch `spring_security` nếu cần tham khảo lại code/giải thích các bước đó.
 
+| Bước | Chủ đề | File giải thích |
+|---|---|---|
 | 12 | OAuth2 Resource Server với Keycloak — validate JWT do Keycloak phát hành, thay thế hoàn toàn Basic Auth/`CustomUserDetailService` | [12-oauth2-resource-server-keycloak.md](12-oauth2-resource-server-keycloak.md) |
+| 13 | CORS (`CorsConfigurationSource`) + tắt CSRF (giải thích vì sao Bearer JWT không cần CSRF) | [13-cors-csrf.md](13-cors-csrf.md) |
 
-### Trạng thái bước 12: đã code xong, CHƯA test với Keycloak thật, CHƯA commit
+**Bước tiếp theo (chưa bắt đầu):** Bước 14 — Rate limiting, audit log, chống brute-force (giới hạn số lần đăng nhập sai, ghi log truy cập/authorization). Lưu ý: bước này nằm ngoài phạm vi Spring Security core (roadmap tự ghi chú vậy), có thể cần thư viện ngoài (Bucket4j...) hoặc filter tự viết.
 
-**Khác quy trình mọi bước trước (ngoại lệ đáng chú ý):** ở bước này **user yêu cầu Claude code trực tiếp** (gõ "bạn hãy code hộ tôi") thay vì tự gõ code — lý do là cần tập trung công sức vào phần dựng hạ tầng Keycloak (Docker, admin console) hơn là gõ lại code Spring. Claude đã sửa `pom.xml`, `application.yaml`, `SecurityConfig.java` và build thành công (`mvn clean compile` → BUILD SUCCESS), nhưng **chưa chạy thử với Keycloak thật** vì việc dựng Docker + tạo realm/client/role/user qua admin console web là thao tác trên máy user, Claude không tự làm được. Đây là ngoại lệ một lần cho bước 12 do có nhiều setup hạ tầng — **không mặc định áp dụng cho các bước sau**, quay lại quy trình "chỉ giải thích, user tự code" trừ khi user yêu cầu lại.
+### ⚠️ Cập nhật quy trình: "code hộ" giờ đã lặp lại 2 lần (bước 12, 13), không còn chắc là ngoại lệ 1 lần
+
+Ghi chú cũ ở bước 12 nói đây "chỉ là ngoại lệ 1 lần, quay lại giải thích-only cho bước sau" — nhưng tới bước 13 user lại gõ "code tiếp cho tôi" và Claude tiếp tục code trực tiếp (sửa `SecurityConfig.java` thêm CORS bean + tắt CSRF, build OK). **Session sau nên hỏi lại user muốn tiếp tục kiểu nào** (giải thích rồi user tự gõ, hay Claude code luôn) thay vì mặc định quay về quy trình cũ — có thể user đã đổi ý muốn Claude code hộ từ giờ trở đi, không chỉ riêng bước 12.
+
+### Trạng thái bước 12-13: đã code xong, CHƯA test với Keycloak thật, CHƯA commit
 
 **Việc còn lại (user tự làm, không phải code):**
 1. Chạy Keycloak qua Docker (`quay.io/keycloak/keycloak:24.0 start-dev`, cổng 8081).
@@ -56,33 +63,37 @@ Bước 8-11 (JWT, refresh token, ownership, OAuth2 GitHub) **không có trên b
 
 ## Trạng thái codebase hiện tại (branch `Keycloak`)
 
-HEAD = commit `2c18b53` ("Implement user authentication and authorization with JPA and H2 database; add CRUD API for notes with role-based access control"). Working tree sạch, chỉ có `CONTEXT-HANDOFF.md` untracked.
+HEAD vẫn = commit `2c18b53` (chưa commit gì thêm — toàn bộ thay đổi bước 12-13 đang là **working tree changes chưa commit**). Chạy `git status`/`git diff` đầu session để xem chính xác.
 
 ```
 api/
   WelcomeController.java     — GET /hello (permitAll)
-  NoteController.java        — CRUD /notes, role-based @PreAuthorize
+  NoteController.java        — CRUD /notes, role-based @PreAuthorize (hasRole('ADMIN') cho delete)
 config/
-  SecurityConfig.java        — SecurityFilterChain: Basic Auth, csrf disabled, exceptionHandling
+  SecurityConfig.java        — (bước 12+13) oauth2ResourceServer thay Basic Auth, JwtAuthenticationConverter map realm_access.roles → ROLE_xxx,
+                                CorsConfigurationSource (origin http://localhost:3000), csrf disabled, exceptionHandling
   MethodSecurityConfig.java  — @EnableMethodSecurity
-  CustomUserDetailService.java — UserDetailsService đọc từ DB
+  CustomUserDetailService.java — DEAD CODE từ bước 12 (không còn AuthenticationProvider nào gọi tới, xem gap bên dưới)
 entity/
-  User.java                  — username, password (bcrypt), roles (String, không prefix ROLE_)
-  Note.java                  — title, content, owner (username)
+  User.java                  — username, password (bcrypt), roles (String, không prefix ROLE_) — chỉ còn ý nghĩa nếu tái sử dụng cho mục đích khác (xem gap)
+  Note.java                  — title, content (không có owner — ownership bước 10 không có trên branch này)
 repository/
   UserRepository, NoteRepository — JpaRepository
 exception/
   GlobalExceptionHandler.java — @RestControllerAdvice: MethodArgumentNotValidException→400
 Runner/
-  SeedUser.java               — @Configuration, CommandLineRunner seed admin/user vào H2 lúc start
+  SeedUser.java               — DEAD CODE từ bước 12 cùng lý do CustomUserDetailService (seed local user nhưng không ai xác thực qua đó nữa)
 ```
 
 Chưa có: `AuthController`, `JwtService`, `JwtAuthenticationFilter`, `RefreshToken`, `NoteSecurity`, `CustomOAuth2UserService`, `OAuth2LoginSuccessHandler`, model `LoginRequest`/`RegisterRequest` — tất cả thuộc bước 8-11, chỉ có trên branch `spring_security`.
 
-`pom.xml`: Spring Boot 3.2.1, Java 17. Dependencies: web, data-jpa, validation, security, h2 (runtime), springdoc-openapi 2.3.0, lombok. **Chưa có** `jjwt-*` hay `spring-boot-starter-oauth2-*` (sẽ thêm `oauth2-resource-server` khi làm bước 12).
+`pom.xml`: Spring Boot 3.2.1, Java 17. Dependencies: web, data-jpa, validation, security, h2 (runtime), springdoc-openapi 2.3.0, lombok, **`spring-boot-starter-oauth2-resource-server` (thêm ở bước 12)**. Vẫn chưa có `jjwt-*`/`spring-boot-starter-oauth2-client`.
+
+`application.yaml`: có thêm `spring.security.oauth2.resourceserver.jwt.issuer-uri: http://localhost:8081/realms/myrealm` (bước 12).
 
 ## Cách bắt đầu session mới
 
-1. Chạy `git branch --show-current` + `git log --oneline -3` để xác nhận đang ở branch nào — đọc đúng phần tương ứng ở file này.
-2. Nếu đang ở branch `Keycloak` và user muốn tiếp tục: đó là bước 12, nội dung đã giải thích đầy đủ ở trên, chỉ cần review code khi user viết xong.
-3. Đọc code thật (`Read`/`git status`) trước khi review hoặc trả lời câu hỏi về hành vi hiện tại — đừng suy đoán từ các file `0X-*.md` vì code có thể đã thay đổi hoặc thuộc branch khác kể từ lúc export.
+1. Chạy `git branch --show-current` + `git log --oneline -3` + `git status` để xác nhận đang ở branch nào và có thay đổi chưa commit gì — đọc đúng phần tương ứng ở file này.
+2. **Hỏi user muốn tiếp tục kiểu nào** trước khi bắt đầu bước mới (giải thích để user tự gõ code, hay Claude code trực tiếp luôn) — xem mục "Cập nhật quy trình" ở trên, đừng mặc định 1 trong 2 kiểu.
+3. Nếu user muốn tiếp tục roadmap: bước tiếp theo trên branch này là **bước 14** (rate limiting/audit log/chống brute-force) — chưa bắt đầu, chưa giải thích gì.
+4. Đọc code thật (`Read`/`git status`) trước khi review hoặc trả lời câu hỏi về hành vi hiện tại — đừng suy đoán từ các file `0X-*.md` vì code có thể đã thay đổi hoặc thuộc branch khác kể từ lúc export.
