@@ -42,14 +42,15 @@ Bước 8-11 (JWT, refresh token, ownership, OAuth2 GitHub) **không có trên b
 |---|---|---|
 | 12 | OAuth2 Resource Server với Keycloak — validate JWT do Keycloak phát hành, thay thế hoàn toàn Basic Auth/`CustomUserDetailService` | [12-oauth2-resource-server-keycloak.md](12-oauth2-resource-server-keycloak.md) |
 | 13 | CORS (`CorsConfigurationSource`) + tắt CSRF (giải thích vì sao Bearer JWT không cần CSRF) | [13-cors-csrf.md](13-cors-csrf.md) |
+| 14 | Rate limiting (fixed window theo IP, tự viết) + Audit log (`AuditLogFilter`, log qua SLF4J) + chống brute-force login chuyển thành cấu hình phía Keycloak | [14-rate-limiting-audit-log.md](14-rate-limiting-audit-log.md) |
 
-**Bước tiếp theo (chưa bắt đầu):** Bước 14 — Rate limiting, audit log, chống brute-force (giới hạn số lần đăng nhập sai, ghi log truy cập/authorization). Lưu ý: bước này nằm ngoài phạm vi Spring Security core (roadmap tự ghi chú vậy), có thể cần thư viện ngoài (Bucket4j...) hoặc filter tự viết.
+**Bước tiếp theo (chưa bắt đầu):** Bước 15 (Cấp 5) — Multi-module/Microservices với Security dùng chung (tách Auth Service riêng, các service khác chỉ verify token). Bước 16 sau đó là viết test cho Security (`spring-security-test`).
 
-### ⚠️ Cập nhật quy trình: "code hộ" giờ đã lặp lại 2 lần (bước 12, 13), không còn chắc là ngoại lệ 1 lần
+### Quy trình làm việc hiện tại: user thường chọn "Claude code trực tiếp" (đã lặp lại 3 lần: bước 12, 13, 14)
 
-Ghi chú cũ ở bước 12 nói đây "chỉ là ngoại lệ 1 lần, quay lại giải thích-only cho bước sau" — nhưng tới bước 13 user lại gõ "code tiếp cho tôi" và Claude tiếp tục code trực tiếp (sửa `SecurityConfig.java` thêm CORS bean + tắt CSRF, build OK). **Session sau nên hỏi lại user muốn tiếp tục kiểu nào** (giải thích rồi user tự gõ, hay Claude code luôn) thay vì mặc định quay về quy trình cũ — có thể user đã đổi ý muốn Claude code hộ từ giờ trở đi, không chỉ riêng bước 12.
+Ghi chú cũ ở bước 12 coi đây là "ngoại lệ 1 lần" — nhưng tới bước 13 và 14 user tiếp tục chọn để Claude code trực tiếp (bước 14 user còn xác nhận rõ qua câu hỏi lựa chọn: "giải thích, đưa code mẫu, sau đó code trực tiếp và xuất ra file md"). Đây gần như đã thành **pattern ổn định**, nhưng **vẫn nên hỏi nhanh đầu mỗi bước mới** (không tốn thời gian, 1 câu hỏi ngắn) vì user có thể muốn tự tay gõ code cho 1 bước cụ thể nào đó (ví dụ bước phức tạp/muốn luyện tập kỹ hơn) — đừng mặc định 100% mà không hỏi.
 
-### Trạng thái bước 12-13: đã code xong, CHƯA test với Keycloak thật, CHƯA commit
+### Trạng thái bước 12-14: đã code xong, CHƯA test với Keycloak thật, CHƯA commit
 
 **Việc còn lại (user tự làm, không phải code):**
 1. Chạy Keycloak qua Docker (`quay.io/keycloak/keycloak:24.0 start-dev`, cổng 8081).
@@ -57,9 +58,11 @@ Ghi chú cũ ở bước 12 nói đây "chỉ là ngoại lệ 1 lần, quay l�
 3. Lấy token bằng curl (`POST /realms/myrealm/protocol/openid-connect/token`, grant_type=password), gọi thử `/notes` và `DELETE /notes/{id}` (cần role ADMIN) để xác nhận role mapping hoạt động đúng.
 4. Báo lại kết quả — nếu có lỗi, gõ "review" như quy trình cũ.
 
-**Gap/dead code đã ghi nhận (chi tiết ở [12-oauth2-resource-server-keycloak.md](12-oauth2-resource-server-keycloak.md) mục 5):**
+**Gap/dead code đã ghi nhận (chi tiết ở [12-oauth2-resource-server-keycloak.md](12-oauth2-resource-server-keycloak.md) mục 5 và [14-rate-limiting-audit-log.md](14-rate-limiting-audit-log.md) mục 5):**
 - `CustomUserDetailService`, entity `User`, `UserRepository`, `SeedUser` giờ không còn được dùng để xác thực (Keycloak đã thay thế hoàn toàn) — vẫn còn trong code, biên dịch được, nhưng là dead code. Chưa xoá vì đó là quyết định dọn dẹp riêng, chưa được user yêu cầu.
 - Nếu sau này làm lại ownership-based authorization (như bước 10 ở nhánh `spring_security`), nhớ dùng claim `preferred_username` từ `Jwt` principal để lấy username thật, KHÔNG dùng `authentication.getName()` (trả về `sub` — UUID nội bộ Keycloak).
+- `RateLimitingFilter` (bước 14) limit theo IP, in-memory (`ConcurrentHashMap`), không dùng được đúng khi scale nhiều instance (mỗi instance có quota riêng), chưa có cơ chế dọn map theo thời gian.
+- Chống brute-force đăng nhập sai giờ là cấu hình phía Keycloak (Realm Settings → Security defenses → Brute force detection), KHÔNG có code tương ứng trong repo này — nếu user hỏi "code chống brute-force đâu", nhớ giải thích lại điểm này, đừng tưởng bị thiếu sót.
 
 ## Trạng thái codebase hiện tại (branch `Keycloak`)
 
@@ -70,9 +73,12 @@ api/
   WelcomeController.java     — GET /hello (permitAll)
   NoteController.java        — CRUD /notes, role-based @PreAuthorize (hasRole('ADMIN') cho delete)
 config/
-  SecurityConfig.java        — (bước 12+13) oauth2ResourceServer thay Basic Auth, JwtAuthenticationConverter map realm_access.roles → ROLE_xxx,
-                                CorsConfigurationSource (origin http://localhost:3000), csrf disabled, exceptionHandling
+  SecurityConfig.java        — (bước 12+13+14) oauth2ResourceServer thay Basic Auth, JwtAuthenticationConverter map realm_access.roles → ROLE_xxx,
+                                CorsConfigurationSource (origin http://localhost:3000), csrf disabled, exceptionHandling,
+                                addFilterBefore(RateLimitingFilter, BearerTokenAuthenticationFilter), addFilterAfter(AuditLogFilter, BearerTokenAuthenticationFilter)
   MethodSecurityConfig.java  — @EnableMethodSecurity
+  RateLimitingFilter.java    — (bước 14) fixed window 20 req/10s theo IP, @Component, trả 429 khi vượt
+  AuditLogFilter.java        — (bước 14) log ip/method/path/status/username/duration qua SLF4J logger "AUDIT", @Component
   CustomUserDetailService.java — DEAD CODE từ bước 12 (không còn AuthenticationProvider nào gọi tới, xem gap bên dưới)
 entity/
   User.java                  — username, password (bcrypt), roles (String, không prefix ROLE_) — chỉ còn ý nghĩa nếu tái sử dụng cho mục đích khác (xem gap)
@@ -95,5 +101,5 @@ Chưa có: `AuthController`, `JwtService`, `JwtAuthenticationFilter`, `RefreshTo
 
 1. Chạy `git branch --show-current` + `git log --oneline -3` + `git status` để xác nhận đang ở branch nào và có thay đổi chưa commit gì — đọc đúng phần tương ứng ở file này.
 2. **Hỏi user muốn tiếp tục kiểu nào** trước khi bắt đầu bước mới (giải thích để user tự gõ code, hay Claude code trực tiếp luôn) — xem mục "Cập nhật quy trình" ở trên, đừng mặc định 1 trong 2 kiểu.
-3. Nếu user muốn tiếp tục roadmap: bước tiếp theo trên branch này là **bước 14** (rate limiting/audit log/chống brute-force) — chưa bắt đầu, chưa giải thích gì.
+3. Nếu user muốn tiếp tục roadmap: bước tiếp theo trên branch này là **bước 15** (Cấp 5 — Multi-module/Microservices với Security dùng chung) — chưa bắt đầu, chưa giải thích gì.
 4. Đọc code thật (`Read`/`git status`) trước khi review hoặc trả lời câu hỏi về hành vi hiện tại — đừng suy đoán từ các file `0X-*.md` vì code có thể đã thay đổi hoặc thuộc branch khác kể từ lúc export.
